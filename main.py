@@ -222,7 +222,7 @@ app.layout = dbc.Container([
     # Dropdowns and radio buttons
     dbc.Row([
         dbc.Col([
-            html.H3("Data Table", style={'marginTop': '40px'}),
+            html.H3("Lead Time Analysis", style={'marginTop': '40px'}),
             html.Div([
                 # First row of dropdowns
                 dbc.Row([
@@ -282,6 +282,12 @@ app.layout = dbc.Container([
                 ])
             ], style={'paddingTop': '5px'})
         ])
+    ]),
+    # Time series plot
+    dbc.Row([
+        dbc.Col([
+            dcc.Graph(id='time-series-plot')
+        ], width=12)
     ]),
     dbc.Row([
         dbc.Col([dcc.Graph(id='item-bar-plot')],width=8),
@@ -405,7 +411,41 @@ def update_datatable(category_filter, family_filter, material_filter, item_filte
     if item_filter:
         filtered_data = filtered_data[filtered_data['Item'].isin(item_filter)]
 
+    filtered_data = filtered_data.sort_values(by='Invoice Date', ascending=True)
+
     return filtered_data.to_dict('records')
+
+# Callback to update the time series plot based on filters
+@app.callback(
+    Output('time-series-plot', 'figure'),
+    [
+        Input('category-dropdown', 'value'),
+        Input('family-dropdown', 'value'),
+        Input('material-dropdown', 'value'),
+        Input('item-dropdown', 'value')
+    ]
+)
+def update_time_series_plot(category_filter, family_filter, material_filter, item_filter):
+    filtered_data = merged_df.copy()
+
+    if category_filter:
+        filtered_data = filtered_data[filtered_data['Category'].isin(category_filter)]
+    if family_filter:
+        filtered_data = filtered_data[filtered_data['Family'].isin(family_filter)]
+    if material_filter:
+        filtered_data = filtered_data[filtered_data['Material'].isin(material_filter)]
+    if item_filter:
+        filtered_data = filtered_data[filtered_data['Item'].isin(item_filter)]
+
+    # Group by Invoice Date and calculate the average Date Difference
+    time_series_data = filtered_data.groupby('Invoice Date')['Date Difference'].mean().reset_index()
+
+    time_series_fig = go.Figure(data=[
+        go.Scatter(x=time_series_data['Invoice Date'], y=time_series_data['Date Difference'], mode='lines+markers')
+    ])
+    time_series_fig.update_layout(title='Average Lead Time Over Time', xaxis_title='Invoice Date', yaxis_title='Average Lead Time')
+
+    return time_series_fig
 
 # Run the app
 if __name__ == '__main__':
