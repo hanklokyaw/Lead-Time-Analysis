@@ -300,18 +300,9 @@ app.layout = dbc.Container([
             ], style={'paddingTop': '5px'})
         ])
     ]),
-    # Monthly Summary bar plots
     dbc.Row([
-        dbc.Col([
-            dcc.Graph(id='monthly-summary-bar-plot')
-        ], width=12)
-    ]),
-
-    # Time series plot
-    dbc.Row([
-        dbc.Col([
-            dcc.Graph(id='time-series-plot')
-        ], width=12)
+        dbc.Col([dcc.Graph(id='time-series-plot')], width=8),
+        dbc.Col([dcc.Graph(id='monthly-summary-bar-plot')], width=4),
     ]),
     dbc.Row([
         dbc.Col([dcc.Graph(id='item-bar-plot')],width=8),
@@ -386,7 +377,7 @@ def update_monthly_summary_bar_plot(category_filter, family_filter, material_fil
     ])
     monthly_fig.update_layout(
         barmode='group',
-        title='Monthly Summary of Average Lead Time',
+        title='Average Lead Time by Month',
         xaxis_title='Month',
         yaxis_title='Average Lead Time',
         xaxis=dict(tickformat="%b %Y"),  # Display the month in 'Month Year' format
