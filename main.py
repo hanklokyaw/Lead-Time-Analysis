@@ -6,6 +6,11 @@ from dash.dependencies import Input, Output
 import plotly.graph_objs as go
 from dash import dash_table
 from get_latest_file import find_latest_report
+from datetime import datetime, timedelta
+
+# Filter the data for the last 12 months
+today = datetime.now()
+last_12_months = today - timedelta(days=365)
 
 download_folder_path = "C:/Users/hank.aungkyaw/Downloads"
 SO_prefix = "SalesOrder1yearHKResults"
@@ -206,6 +211,18 @@ default_df.rename(columns={'Unique_ID' : 'Document Number', 'Date Difference':'L
 
 merged_df = merged_df[['Item', 'Category', 'Family', 'Material', 'Sales Date', 'Sales Quantity', 'Invoice Date', 'Invoice Quantity', 'Date Difference']]
 
+### Added to parse sales months
+# Ensure the 'Sales Date' and 'Invoice Date' are within the last 12 months
+merged_df = merged_df[(merged_df['Sales Date'] >= last_12_months) & (merged_df['Sales Date'] <= today)]
+
+# Group by month for sales and invoice data
+merged_df['Sales Month'] = merged_df['Sales Date'].dt.to_period('M').dt.to_timestamp()
+monthly_summary = merged_df.groupby('Sales Month').agg({'Sales Quantity': 'sum', 'Invoice Quantity': 'sum'}).reset_index()
+
+# Debug print to check the monthly summary
+print("Monthly Summary:")
+print(monthly_summary)
+
 # Initialize Dash app
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
@@ -283,6 +300,13 @@ app.layout = dbc.Container([
             ], style={'paddingTop': '5px'})
         ])
     ]),
+    # Monthly Summary bar plots
+    dbc.Row([
+        dbc.Col([
+            dcc.Graph(id='monthly-summary-bar-plot')
+        ], width=12)
+    ]),
+
     # Time series plot
     dbc.Row([
         dbc.Col([
@@ -314,6 +338,65 @@ app.layout = dbc.Container([
         }
     )
 ], fluid=True)
+
+
+@app.callback(
+    Output('monthly-summary-bar-plot', 'figure'),
+    [
+        Input('category-dropdown', 'value'),
+        Input('family-dropdown', 'value'),
+        Input('material-dropdown', 'value'),
+        Input('item-dropdown', 'value'),
+        Input('sort-order-radio', 'value')
+    ]
+)
+def update_monthly_summary_bar_plot(category_filter, family_filter, material_filter, item_filter, sort_order):
+    filtered_data = merged_df.copy()
+
+    if category_filter:
+        filtered_data = filtered_data[filtered_data['Category'].isin(category_filter)]
+    if family_filter:
+        filtered_data = filtered_data[filtered_data['Family'].isin(family_filter)]
+    if material_filter:
+        filtered_data = filtered_data[filtered_data['Material'].isin(material_filter)]
+    if item_filter:
+        filtered_data = filtered_data[filtered_data['Item'].isin(item_filter)]
+
+    # Ensure 'Invoice Date' is a datetime object if not already
+    filtered_data['Invoice Date'] = pd.to_datetime(filtered_data['Invoice Date'])
+
+    # Group by Invoice Date and calculate the average Date Difference for each day
+    daily_average = filtered_data.groupby('Invoice Date')['Date Difference'].mean().reset_index()
+
+    # Create a 'Sales Month' column for monthly aggregation
+    daily_average['Sales Month'] = daily_average['Invoice Date'].dt.to_period('M')
+
+    # Group by Sales Month and calculate the average of daily averages
+    monthly_summary = daily_average.groupby('Sales Month')['Date Difference'].mean().reset_index().round(2)
+
+    # Sort the data based on the specified order
+    monthly_summary = monthly_summary.sort_values(by='Sales Month', ascending=(sort_order == 'desc'))
+
+    # Create the bar plot for monthly summary
+    monthly_fig = go.Figure(data=[
+        go.Bar(name='Average Lead Time',
+                x=monthly_summary['Sales Month'].dt.strftime('%b %Y'),
+                y=monthly_summary['Date Difference'],
+                ),
+    ])
+    monthly_fig.update_layout(
+        barmode='group',
+        title='Monthly Summary of Average Lead Time',
+        xaxis_title='Month',
+        yaxis_title='Average Lead Time',
+        xaxis=dict(tickformat="%b %Y"),  # Display the month in 'Month Year' format
+        legend_title='Legend'
+    )
+
+    return monthly_fig
+
+
+
 
 # Callbacks to update the bar plots based on filters
 @app.callback(
